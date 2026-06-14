@@ -26,16 +26,16 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 #  YT-DLP OPTIONS
 # ─────────────────────────────────────────────
 YDL_OPTIONS = {
-    "format": "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
+    "format": "bestaudio*",
     "noplaylist": False,
-    "quiet": True,
-    "no_warnings": True,
+    "quiet": False,
+    "no_warnings": False,
     "cookiefile": "/app/cookies.txt",
     "default_search": "ytsearch",
     "source_address": "0.0.0.0",
-    "prefer_ffmpeg": True,
     "geo_bypass": True,
     "nocheckcertificate": True,
+    "extractor_retries": 3,
 }
 
 FFMPEG_OPTIONS = {
