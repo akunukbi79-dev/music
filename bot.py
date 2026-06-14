@@ -8,6 +8,12 @@ import aiohttp
 import base64
 from collections import deque
 
+try:
+    from pytubefix import YouTube as PyTube
+    PYTUBE_AVAILABLE = True
+except ImportError:
+    PYTUBE_AVAILABLE = False
+
 # ─────────────────────────────────────────────
 #  KONFIGURASI
 # ─────────────────────────────────────────────
@@ -228,6 +234,9 @@ async def play_next(guild: discord.Guild):
         return
 
     loop = asyncio.get_event_loop()
+    stream_url = None
+
+    # Coba yt-dlp dulu
     with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
         try:
             info = await loop.run_in_executor(
@@ -235,8 +244,6 @@ async def play_next(guild: discord.Guild):
                     song.get("webpage_url") or song["url"], download=False
                 )
             )
-            # Cari format terbaik yang ada URL nya
-            stream_url = None
             if "formats" in info:
                 for f in reversed(info["formats"]):
                     if f.get("url") and f.get("acodec") != "none":
@@ -245,8 +252,31 @@ async def play_next(guild: discord.Guild):
             if not stream_url:
                 stream_url = info.get("url")
         except Exception as e:
-            print(f"[fetch error] {e}")
-            stream_url = song["url"]
+            print(f"[yt-dlp error] {e}")
+
+    # Fallback ke pytubefix kalau yt-dlp gagal
+    if not stream_url and PYTUBE_AVAILABLE:
+        try:
+            webpage_url = song.get("webpage_url") or song["url"]
+            if "youtube.com" in webpage_url or "youtu.be" in webpage_url:
+                yt = await loop.run_in_executor(None, lambda: PyTube(webpage_url))
+                stream = await loop.run_in_executor(
+                    None, lambda: yt.streams.filter(only_audio=True).order_by("abr").last()
+                )
+                if stream:
+                    stream_url = stream.url
+                    print(f"[pytubefix] Fallback berhasil: {stream_url[:60]}")
+        except Exception as e:
+            print(f"[pytubefix error] {e}")
+
+    if not stream_url:
+        print("[Error] Tidak bisa dapat stream URL")
+        if state.text_channel:
+            await state.text_channel.send(
+                embed=music_embed("❌ Error", f"Gagal memutar **{song['title']}**, skip ke lagu berikutnya...", color=0xff0000)
+            )
+        await play_next(guild)
+        return
 
     source = discord.FFmpegPCMAudio(stream_url, **FFMPEG_OPTIONS)
     source = discord.PCMVolumeTransformer(source, volume=state.volume)
